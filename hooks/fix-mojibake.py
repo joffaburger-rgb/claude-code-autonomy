@@ -1,26 +1,34 @@
 #!/usr/bin/env python3
 """PostToolUse hook: scan every written file for cp1252/Latin-1 mojibake and fix in place.
 
-Fires after every Write or Edit tool call. If the written file contains
-characters that look like cp1252 or Latin-1 bytes mis-decoded as UTF-8,
-the hook re-encodes them correctly and overwrites the file silently.
-
-Only processes text files (see TEXT_EXTS). Fails open on any error.
+Detection uses byte-pattern matching only — safe for UTF-8, CJK, Japanese, Arabic, emoji.
+Never triggers on clean UTF-8 files that happen to contain Latin characters.
 """
-import sys, json, os, re
+import sys, json, os
 
 TEXT_EXTS = {'.html', '.md', '.txt', '.py', '.swift', '.csv', '.js', '.ts', '.sh'}
 
-MOJIBAKE_RE = re.compile(
-    r'[\xc3][\xa2][\xe2][\x82][\xac][\xe2][\x80][\x9d]'   # â€" (em dash cp1252)
-    r'|[\xc3][\xa2][\xe2][\x82][\xac][\xe2][\x80][\x98]'   # â€˜ (left single quote cp1252)
-    r'|[\xc3][\xa2][\xe2][\x82][\xac][\xe2][\x80][\x99]'   # â€™ (right single quote cp1252)
-    r'|[\xc3][\xa2][\xe2][\x82][\xac][\xc5][\x93]'         # â€œ (left double quote cp1252)
-    r'|â€["\u009c\u009d\u0098\u0099\u0094\u0093\u0096\u0097\u0080\u0082\u0083\u0084\u0085\u0086\u0087\u0088\u0089\u008a\u008b\u008c\u008d\u008e\u008f\u0090\u0091\u0092]'
-    .encode('utf-8').decode('utf-8')
-)
+# Known mojibake byte signatures: cp1252 characters misread as UTF-8.
+# Each tuple is a (bytes_pattern, description).
+# These byte sequences cannot appear in valid UTF-8 text.
+MOJIBAKE_SIGNATURES = [
+    b'\xc3\xa2\xe2\x82\xac\xe2\x80\x9d',  # â€" em dash
+    b'\xc3\xa2\xe2\x82\xac\xe2\x80\x98',  # â€˜ left single quote
+    b'\xc3\xa2\xe2\x82\xac\xe2\x80\x99',  # â€™ right single quote
+    b'\xc3\xa2\xe2\x82\xac\xc5\x93',       # â€œ left double quote
+    b'\xc3\xa2\xe2\x82\xac\xe2\x80\x9c',  # â€œ left double quote variant
+    b'\xc3\x83\xc2\xa9',                    # Ã© → é
+    b'\xc3\x83\xc2\xa0',                    # Ã  → à
+    b'\xc3\x83\xc2\xa8',                    # Ã¨ → è
+    b'\xc3\x83\xc2\xbc',                    # Ã¼ → ü
+    b'\xc3\x83\xc2\xb6',                    # Ã¶ → ö
+    b'\xc3\x83\xc2\xa4',                    # Ã¤ → ä
+]
 
-def fix_mojibake(s):
+def has_mojibake_bytes(raw: bytes) -> bool:
+    return any(sig in raw for sig in MOJIBAKE_SIGNATURES)
+
+def fix_mojibake(s: str):
     for enc in ('cp1252', 'latin-1'):
         try:
             fixed = s.encode(enc).decode('utf-8')
@@ -31,7 +39,6 @@ def fix_mojibake(s):
     return s, None
 
 def log_file(session_id, path, fixed, enc):
-    """Append file record to session verify log."""
     try:
         log = f"/tmp/cc-verify-{session_id}.jsonl"
         with open(log, 'a') as f:
@@ -45,16 +52,24 @@ def scan_and_fix(path, session_id):
         return
     if not os.path.isfile(path):
         return
+
+    # Read as bytes first — safe detection, no risk of corruption
     try:
-        with open(path, 'r', encoding='utf-8') as f:
-            content = f.read()
-    except (UnicodeDecodeError, OSError):
+        with open(path, 'rb') as f:
+            raw = f.read()
+    except OSError:
         return
 
-    suspect_chars = {'â', 'Ã', ''}
-    if not any(c in content for c in suspect_chars):
+    # Only proceed if known mojibake byte patterns are present
+    if not has_mojibake_bytes(raw):
         log_file(session_id, path, False, None)
         return
+
+    # Decode as UTF-8 to get string for fix attempt
+    try:
+        content = raw.decode('utf-8')
+    except UnicodeDecodeError:
+        return  # Not valid UTF-8 — skip
 
     fixed, enc = fix_mojibake(content)
     if enc and fixed != content:
