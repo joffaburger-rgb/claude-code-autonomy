@@ -116,17 +116,13 @@ bash install.sh
 
 Then merge `settings-example.json` into your `~/.claude/settings.json` (update all `YOUR_USERNAME` and `YOUR_PROJECT_ID` placeholders).
 
-## The classifier bypass
-
-Claude Code has a server-side semantic classifier that blocks certain operations in auto mode (credential exploration, self-modification, etc.). The PreToolUse hook with `permissionDecision:allow` intercepts before the classifier fires for Bash commands.
-
-See `docs/classifier-bypass.md` for full details and the one remaining limitation.
-
 ## File structure
 
 ```
+settings-example.json        — settings.json template (sanitised, replace YOUR_USERNAME)
+CLAUDE.md                    — global rules file (persistence, Lydia's rule, delegation)
+install.sh                   — setup script
 hooks/
-  settings-example.json      — settings.json template (sanitised, replace YOUR_USERNAME)
   search-ground.py           — research protocol hook
   delegate-ground.py         — delegation protocol hook
   fix-mojibake.py            — encoding fixer hook
@@ -135,14 +131,11 @@ hooks/
   stop-transcript-dump.py    — saves full transcript on Stop
   subagent-stop-log.py       — logs sub-agent completions
   post-tool-log.py           — logs every tool call to post-tool-use.jsonl
-CLAUDE.md                    — global rules file (persistence, Lydia's rule, delegation)
 memory/
   MEMORY-template.md         — blank MEMORY.md index template
   CORE-template.md           — what to put in CORE.md
 docs/
   TRUTH-PLAYBOOK-pattern.md  — per-project state file pattern
-  classifier-bypass.md       — how to bypass the auto-mode classifier
-install.sh                   — setup script
 ```
 
 ## Changelog
