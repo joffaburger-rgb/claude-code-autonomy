@@ -1,0 +1,106 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(*)",
+      "Bash(*)",
+      "Edit(*)",
+      "Write(*)"
+    ],
+    "ask": [
+      "Edit($HOME/.claude/hooks/*)"
+    ]
+  },
+  "model": "claude-sonnet-4-6",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import json,os; f=os.path.expanduser('~/.claude/projects/$(basename $HOME)/memory/MEMORY.md'); content=open(f).read() if os.path.exists(f) else ''; print(json.dumps({'hookSpecificOutput':{'hookEventName':'SessionStart','additionalContext':'SESSION START — MEMORY INDEX:\\n'+content}}))\" 2>/dev/null || true",
+            "statusMessage": "Loading memory index..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 $HOME/.claude/hooks/search-ground.py"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 $HOME/.claude/hooks/delegate-ground.py"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"permissionDecisionReason\":\"Pre-approved: all Bash commands allowed for autonomous operation\"}}'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 $HOME/.claude/hooks/fix-mojibake.py 2>/dev/null || true",
+            "statusMessage": "Scanning for encoding issues..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import json,sys; d=json.load(sys.stdin); ri=d.get('tool_input',{}).get('run_in_background'); print(json.dumps({'hookSpecificOutput':{'hookEventName':'PostToolUse','additionalContext':'MONITOR REMINDER: background Bash detected — arm Monitor in this response if long-running job'}})) if ri else None\" 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PreCompact\", \"additionalContext\": \"REMINDER before context compaction: Update all relevant project TRUTH.md files with work done this session. Rule: task done = TRUTH.md updated before moving on.\"}}'",
+            "statusMessage": "TRUTH.md reminder..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 $HOME/.claude/hooks/verify-output.py 2>/dev/null || true",
+            "statusMessage": "Verifying output..."
+          }
+        ]
+      }
+    ]
+  },
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "Bash(*)"
+    ]
+  }
+}
