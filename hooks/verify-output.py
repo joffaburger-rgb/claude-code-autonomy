@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-"""Stop hook: scan written files for encoding issues and surface any problems.
-
-Fires when CC stops at the end of a session or turn. Reads the session's
-file log (written by fix-mojibake.py), checks each file for residual
-encoding issues, and surfaces a warning if any are found.
-
-Silent on clean sessions — only speaks up when there's a problem.
-"""
+"""Stop hook: inject task verification reminder + scan written files for encoding issues."""
 import json, os, sys, re
 
 TEXT_EXTS = {'.html', '.md', '.txt', '.py', '.swift', '.csv', '.js', '.ts', '.sh'}
@@ -25,7 +18,7 @@ def check_file(path):
     # UTF-8 replacement char (EF BF BD)
     if b'\xef\xbf\xbd' in raw:
         issues.append('replacement chars')
-    # cp1252 mojibake: em-dash (E2 80 94) misread -> C3 A2 E2 82 AC E2 80 9D
+    # cp1252 mojibake: em-dash (E2 80 94) misread → C3 A2 E2 82 AC E2 80 9D
     if b'\xc3\xa2\xe2\x82\xac' in raw:
         issues.append('mojibake remaining')
     # Verify readable as UTF-8
@@ -44,6 +37,7 @@ def main():
     session_id = data.get('session_id', 'unknown')
     log_path = f"/tmp/cc-verify-{session_id}.jsonl"
 
+    # Read + clear file log (optional — reminder fires regardless)
     file_summary = ""
     try:
         if os.path.exists(log_path):

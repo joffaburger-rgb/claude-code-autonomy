@@ -1,0 +1,192 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(*)",
+      "Edit(/Users/YOUR_USERNAME/.hermes/*)",
+      "Edit(/Users/YOUR_USERNAME/.openclaw/*)",
+      "Bash(*)",
+      "Edit(*)",
+      "Write(*)"
+    ],
+    "ask": [
+      "Edit(/Users/YOUR_USERNAME/.claude/hooks/*)"
+    ]
+  },
+  "model": "claude-sonnet-4-6",
+  "effortLevel": "medium",
+  "modelSettings": {
+    "claude-sonnet-4-6": {
+      "effortLevel": "medium"
+    }
+  },
+  "theme": "dark",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import json,os; f=os.path.expanduser('~/.claude/projects/YOUR_PROJECT_ID/memory/MEMORY.md'); content=open(f).read() if os.path.exists(f) else ''; print(json.dumps({'hookSpecificOutput':{'hookEventName':'SessionStart','additionalContext':'SESSION START — MEMORY INDEX:\\n'+content}}))\" 2>/dev/null || true",
+            "statusMessage": "Loading memory index..."
+          },
+          {
+            "type": "command",
+            "command": "python3 -c \"\nimport json, os\nfrom collections import Counter\nlog = os.path.expanduser('~/.claude/logs/post-tool-use.jsonl')\nif not os.path.exists(log):\n    print(json.dumps({'hookSpecificOutput':{'hookEventName':'SessionStart','additionalContext':'TOOL LOG: no log yet (first session after hook install)'}}))\nelse:\n    lines = open(log).readlines()\n    tools = Counter()\n    for l in lines:\n        try: tools[json.loads(l)['tool']] += 1\n        except: pass\n    top = ', '.join(f'{v}x {k}' for k,v in tools.most_common(8))\n    total = sum(tools.values())\n    summary = f'LAST SESSION TOOL LOG ({total} calls): {top}'\n    if tools.get('Agent',0) > 50:\n        summary += f' NOTE: {tools[\\\"Agent\\\"]} agent forks (high; review delegation rule)'\n    print(json.dumps({'hookSpecificOutput':{'hookEventName':'SessionStart','additionalContext':summary}}))\n\" 2>/dev/null || true",
+            "statusMessage": "Reading tool log..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/YOUR_USERNAME/.claude/hooks/search-ground.py"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/YOUR_USERNAME/.claude/hooks/delegate-ground.py"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/YOUR_USERNAME/.claude/hooks/block-dotenv.py 2>/dev/null"
+          },
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"permissionDecisionReason\":\"pre-approved Bash\"}}'",
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/YOUR_USERNAME/.claude/hooks/block-dotenv.py 2>/dev/null"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/YOUR_USERNAME/.claude/hooks/block-dotenv.py 2>/dev/null"
+          },
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"permissionDecisionReason\":\"pre-approved Edit\"}}'"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/YOUR_USERNAME/.claude/hooks/block-dotenv.py 2>/dev/null"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PreCompact\", \"additionalContext\": \"REMINDER: Update TRUTH.md before compaction.\"}}'",
+            "statusMessage": "TRUTH.md reminder..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/YOUR_USERNAME/.claude/hooks/fix-mojibake.py 2>/dev/null || true",
+            "statusMessage": "Scanning for mojibake..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import json,sys; d=json.load(sys.stdin); ri=d.get('tool_input',{}).get('run_in_background'); print(json.dumps({'hookSpecificOutput':{'hookEventName':'PostToolUse','additionalContext':'MONITOR REMINDER: background Bash — arm Monitor'}})) if ri else None\" 2>/dev/null || true"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/YOUR_USERNAME/.claude/hooks/post-tool-log.py 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/YOUR_USERNAME/.claude/hooks/verify-output.py 2>/dev/null || true",
+            "statusMessage": "Verifying output..."
+          },
+          {
+            "type": "command",
+            "command": "python3 /Users/YOUR_USERNAME/.claude/hooks/stop-transcript-dump.py 2>/dev/null || true",
+            "statusMessage": "Saving transcript..."
+          }
+        ]
+      }
+    ],
+    "SubAgentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/YOUR_USERNAME/.claude/hooks/subagent-stop-log.py 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  },
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "Bash(*)"
+    ]
+  },
+  "mcpServers": {
+    "web-tools": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/Users/YOUR_USERNAME/workspace/web-tools-mcp/src/server.mjs"],
+      "env": {
+        "BRAVE_SEARCH_API_KEY": "YOUR_BRAVE_API_KEY"
+      }
+    },
+    "firecrawl": {
+      "type": "http",
+      "url": "https://mcp.firecrawl.dev/v2/mcp"
+    }
+  }
+}
